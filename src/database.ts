@@ -20,11 +20,11 @@ export const connectDB = async () => {
     try {
         const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/whatsapp-tracker';
         console.log('[MongoDB] Connecting to', uri);
-        await mongoose.connect(uri);
+        // Set short timeout for dev
+        await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
         console.log('[MongoDB] Connected');
     } catch (err) {
-        console.error('[MongoDB] Connection Error:', err);
-        // Keep process running to allow dev inspection; rethrow so callers can decide
-        throw err;
+        console.error('[MongoDB] Connection Error: Continuing without database for development.');
+        // Do not rethrow, allow app to start without DB
     }
 };

@@ -267,7 +267,19 @@ export class WhatsAppTracker {
         try {
             // Normalize state to one of the allowed enum values
             const s = (state || '').toString().toLowerCase();
-            const normalized = s.includes('online') ? 'Online' : (s.includes('standby') ? 'Standby' : 'Offline');
+            let normalized = 'Offline';
+
+            if (s.includes('online')) {
+                normalized = 'Online';
+            } else if (s.includes('standby')) {
+                normalized = 'Standby';
+            } else if (s.includes('calibrating')) {
+                // Map 'Calibrating...' to 'Standby' for DB storage purposes
+                // This prevents initial data from being flagged as 'Offline'
+                normalized = 'Standby';
+            } else {
+                normalized = 'Offline';
+            }
 
             await Metric.create({
                 jid,

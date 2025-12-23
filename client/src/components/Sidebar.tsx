@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Activity } from 'lucide-react';
+import { User, Activity, LogOut } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 interface Contact {
@@ -13,9 +13,11 @@ interface SidebarProps {
   selectedJid: string | null;
   onSelect: (jid: string) => void;
   onAddContact: (number: string) => void;
+  onLogout: () => void;
+  isConnected: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ contacts, selectedJid, onSelect, onAddContact }) => {
+const Sidebar: React.FC<SidebarProps> = ({ contacts, selectedJid, onSelect, onAddContact, onLogout, isConnected }) => {
   const [newNumber, setNewNumber] = React.useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -84,6 +86,17 @@ const Sidebar: React.FC<SidebarProps> = ({ contacts, selectedJid, onSelect, onAd
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="p-4 border-t border-white/10">
+          <button
+              onClick={onLogout}
+              disabled={!isConnected}
+              className="w-full flex items-center justify-center gap-2 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-mono"
+          >
+              <LogOut className="w-4 h-4" />
+              DISCONNECT SESSION
+          </button>
       </div>
     </div>
   );
