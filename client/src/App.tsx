@@ -27,6 +27,21 @@ function App() {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Poll status
+  useEffect(() => {
+    const checkStatus = async () => {
+        try {
+            const res = await axios.get('/api/status');
+            setIsConnected(res.data.connected);
+        } catch (err) {
+            console.error("Status check failed", err);
+        }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Initialize Socket
   useEffect(() => {
     const newSocket = io(SOCKET_URL);
@@ -38,6 +53,7 @@ function App() {
 
     newSocket.on('qr', (qr) => {
         setQrCode(qr);
+        setIsConnected(false); // If QR comes, we are not connected
     });
 
     newSocket.on('connection-open', () => {
@@ -114,6 +130,18 @@ function App() {
     socket?.emit('add-contact', number);
   };
 
+  const handleLogout = async () => {
+      try {
+          await axios.post('/api/logout');
+          setIsConnected(false);
+          setContacts([]);
+          setSelectedJid(null);
+          // QR should arrive via socket shortly
+      } catch (err) {
+          console.error("Logout failed", err);
+      }
+  };
+
   const selectedContact = contacts.find(c => c.jid === selectedJid);
 
   if (!isConnected && qrCode) {
@@ -135,6 +163,8 @@ function App() {
         selectedJid={selectedJid}
         onSelect={setSelectedJid}
         onAddContact={handleAddContact}
+        onLogout={handleLogout}
+        isConnected={isConnected}
       />
 
       <main className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto">

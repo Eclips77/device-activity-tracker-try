@@ -12,6 +12,8 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import makeWASocket, { DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
 import { pino } from 'pino';
 import { Boom } from '@hapi/boom';
@@ -21,14 +23,64 @@ import { connectDB, Metric } from './database';
 const app = express();
 app.use(cors());
 
-// Connect to Database
-connectDB();
+// Global variables
+let sock: any;
+let isWhatsAppConnected = false;
+const trackers: Map<string, WhatsAppTracker> = new Map(); // JID -> Tracker instance
+const AUTH_DIR = process.env.WA_AUTH_DIR || 'auth_info_baileys';
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
         origin: "*", // Allow all origins for dev
         methods: ["GET", "POST"]
+    }
+});
+
+// Status API
+app.get('/api/status', (req, res) => {
+    res.json({
+        connected: isWhatsAppConnected,
+        trackingCount: trackers.size,
+        authenticated: fs.existsSync(path.join(AUTH_DIR, 'creds.json'))
+    });
+});
+
+// Logout API
+app.post('/api/logout', async (req, res) => {
+    try {
+        console.log('[LOGOUT] Requested');
+
+        // 1. Stop all trackers
+        trackers.forEach(tracker => tracker.stopTracking());
+        trackers.clear();
+
+        // 2. Logout from socket if possible
+        if (sock) {
+            try {
+                await sock.logout();
+            } catch (err) {
+                console.error('Error logging out socket:', err);
+            }
+            sock.end(undefined);
+            sock = undefined;
+        }
+
+        // 3. Delete auth directory
+        if (fs.existsSync(AUTH_DIR)) {
+            fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+            console.log(`[LOGOUT] Deleted auth directory: ${AUTH_DIR}`);
+        }
+
+        isWhatsAppConnected = false;
+
+        // 4. Restart connection logic to generate new QR
+        connectToWhatsApp();
+
+        res.json({ success: true, message: 'Logged out successfully' });
+    } catch (err: any) {
+        console.error('[LOGOUT] Error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -121,9 +173,6 @@ app.get('/api/analysis/:jid', async (req, res) => {
                         }
                     } else {
                          // Gap too large, reset sleep sequence?
-                         // Or maybe just don't add to it, but keep the sequence if it continues?
-                         // If the tracker was off, we don't know if they were sleeping.
-                         // Let's reset for safety.
                          currentSleepDuration = 0;
                     }
                 }
@@ -143,13 +192,8 @@ app.get('/api/analysis/:jid', async (req, res) => {
     }
 });
 
-let sock: any;
-let isWhatsAppConnected = false;
-const trackers: Map<string, WhatsAppTracker> = new Map(); // JID -> Tracker instance
-
 async function connectToWhatsApp() {
-    const authDir = process.env.WA_AUTH_DIR || 'auth_info_baileys';
-    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
     sock = makeWASocket({
         auth: state,
@@ -189,12 +233,11 @@ async function connectToWhatsApp() {
 
     sock.ev.on('messages.update', (updates: any) => {
         for (const update of updates) {
-            console.log(`[MSG UPDATE] JID: ${update.key.remoteJid}, ID: ${update.key.id}, Status: ${update.update.status}, FromMe: ${update.key.fromMe}`);
+            // Optional debug log
+            // console.log(`[MSG UPDATE] JID: ${update.key.remoteJid}, ID: ${update.key.id}, Status: ${update.update.status}, FromMe: ${update.key.fromMe}`);
         }
     });
 }
-
-connectToWhatsApp();
 
 io.on('connection', (socket) => {
     console.log('Client connected');
@@ -269,6 +312,18 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
-httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+
+// Start Server Sequence
+(async () => {
+    try {
+        await connectDB();
+
+        httpServer.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+            connectToWhatsApp();
+        });
+    } catch (err) {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    }
+})();
