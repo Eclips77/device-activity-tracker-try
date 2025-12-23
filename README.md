@@ -33,21 +33,34 @@ npm install
 cd client && npm install && cd ..
 ```
 
-**Requirements:** Node.js 16+, npm, WhatsApp account
+**Requirements:**
+- Node.js 16+
+- npm
+- WhatsApp account
+- MongoDB (Optional: app will run without it but data won't be saved)
 
 ## Usage
 
 ### Web Interface (Recommended)
 
-```bash
-# Terminal 1: Start backend
-npm run start:server
+1. **Start Backend:**
+   ```bash
+   npm run start:server
+   ```
+   Server runs on `http://localhost:3001`.
 
-# Terminal 2: Start frontend
-npm run start:client
-```
+2. **Start Frontend:**
+   ```bash
+   cd client
+   npm run dev
+   ```
+   Frontend usually runs on `http://localhost:5173`.
 
-Open `http://localhost:3000`, scan QR code with WhatsApp, then enter phone number to track (e.g., `491701234567`).
+3. **Connect:**
+   - Open the frontend URL.
+   - Scan the QR code using WhatsApp (Linked Devices).
+   - Once connected, use the sidebar to add a target phone number (e.g., `491701234567`).
+   - Use the "Disconnect Session" button to log out and switch accounts if needed.
 
 ### CLI Interface
 
@@ -57,15 +70,24 @@ npm start
 
 Follow prompts to authenticate and enter target number.
 
+## Features
+
+- **Real-time RTT Monitoring**: Visual gauge showing current latency.
+- **Activity State Detection**: Classifies device as Online, Standby, or Offline.
+- **Session Control**: Full control to connect/disconnect WhatsApp sessions via the UI.
+- **Data Insights**: Historical timeline and activity heatmaps (requires MongoDB).
+- **Privacy-Focused**: Uses silent reaction messages to minimize user disruption.
+
 ## How It Works
 
-The tracker sends reaction messages to non-existent message IDs, which triggers no notifications at the target. The time between sending the probe message and receiving the CLIENT ACK (Status 3) is measured as RTT. Device state is detected using a dynamic threshold calculated as 90% of the median RTT: values below the threshold indicate active usage, values above indicate standby mode. Measurements are stored in a history and the median is continuously updated to adapt to different network conditions.
+The tracker sends reaction messages to non-existent message IDs, which triggers no notifications at the target. The time between sending the probe message and receiving the CLIENT ACK (Status 3) is measured as RTT.
 
-## Known Issues
+Device state is detected using a dynamic threshold:
+- **Online**: RTT < Threshold (active usage)
+- **Standby**: RTT > Threshold (screen off/background)
+- **Offline**: High RTT or no response
 
-1. **Offline Detection Bug**: The offline detection is currently not working reliably
-
-If you have time and interest, feel free to submit a pull request to fix these issues.
+Measurements are stored in a history (if DB is connected) and analyzed to show usage patterns.
 
 ## Project Structure
 
